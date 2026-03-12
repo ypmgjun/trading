@@ -358,7 +358,7 @@
         <div id="content">
             <div class="loading" id="loading" style="display:none;">
                 <div class="spinner"></div>
-                <span>KRX 데이터 분석 중...</span>
+                <span id="loadingText">KRX 데이터 분석 중... (예상 소요: 약 1~2분)</span>
             </div>
             <div id="results"></div>
         </div>
@@ -730,7 +730,7 @@
                 document.getElementById('searchResults').innerHTML = '<p class="loading" style="color:var(--down);">종목명 또는 코드를 입력해 주세요.</p>';
                 return;
             }
-            document.getElementById('searchResults').innerHTML = '<div class="loading"><div class="spinner"></div><span>분석 중...</span></div>';
+            document.getElementById('searchResults').innerHTML = '<div class="loading"><div class="spinner"></div><span>분석 중... (예상 소요: 약 5~10초)</span></div>';
             btnSearch.disabled = true;
             try {
                 const res = await fetch('/api/analyze?q=' + encodeURIComponent(q));
