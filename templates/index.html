@@ -286,6 +286,9 @@
         .broker-targets .list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
         .broker-targets .item { font-size: 0.8rem; padding: 0.25rem 0.5rem; background: var(--bg-hover); border-radius: 6px; color: var(--text-primary); }
         .broker-targets .item span { color: var(--accent); font-weight: 500; }
+        .broker-targets .source-links { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+        .broker-targets .source-links a { font-size: 0.75rem; color: var(--accent); text-decoration: none; }
+        .broker-targets .source-links a:hover { text-decoration: underline; }
 
         .tabs {
             display: flex;
@@ -484,8 +487,17 @@
                                 </div>
                             </div>
                             <div class="broker-targets">
-                                <div class="label">증권사별 목표가 (참고용)</div>
-                                ${(s.broker_targets && s.broker_targets.length) ? '<div class="list">' + s.broker_targets.map(t => '<div class="item">' + escapeHtml(t.broker) + ' <span>' + formatPrice(t.target_price) + '원</span></div>').join('') + '</div>' : '<div class="metric-desc">목표가 데이터 없음 (FnGuide 등 참고)</div>'}
+                                <div class="label">증권사별 목표가 (웹 검색·출처 링크)</div>
+                                ${(s.broker_targets && s.broker_targets.length) ? '<div class="list">' + s.broker_targets.map(t => '<div class="item">' + escapeHtml(t.broker) + ' <span>' + formatPrice(t.target_price) + '원</span></div>').join('') + '</div>' : ''}
+                                <div class="source-links">
+                                    <a href="https://search.naver.com/search.naver?query=${encodeURIComponent(s.name + ' 증권사 목표가')}" target="_blank" rel="noopener">목표가 검색 (네이버)</a>
+                                    <span style="color:var(--border);">|</span>
+                                    <a href="https://finance.naver.com/item/main.naver?code=${s.code}" target="_blank" rel="noopener">출처: 네이버 금융</a>
+                                    <span style="color:var(--border);">|</span>
+                                    <a href="https://www.fnguide.com/stock/${s.code}/summary" target="_blank" rel="noopener">출처: FnGuide</a>
+                                    <span style="color:var(--border);">|</span>
+                                    <a href="https://www.google.com/search?q=${encodeURIComponent(s.name + ' 증권사 목표가')}" target="_blank" rel="noopener">Google 검색</a>
+                                </div>
                             </div>
                             <div class="metrics">
                                 <div class="metric">
@@ -597,8 +609,17 @@
                             </div>
                         </div>
                         <div class="broker-targets">
-                            <div class="label">증권사별 목표가 (참고용)</div>
-                            ${(s.broker_targets && s.broker_targets.length) ? '<div class="list">' + s.broker_targets.map(t => '<div class="item">' + escapeHtml(t.broker) + ' <span>' + formatPrice(t.target_price) + '원</span></div>').join('') + '</div>' : '<div class="metric-desc">목표가 데이터 없음 (FnGuide 등 참고)</div>'}
+                            <div class="label">증권사별 목표가 (웹 검색·출처 링크)</div>
+                            ${(s.broker_targets && s.broker_targets.length) ? '<div class="list">' + s.broker_targets.map(t => '<div class="item">' + escapeHtml(t.broker) + ' <span>' + formatPrice(t.target_price) + '원</span></div>').join('') + '</div>' : ''}
+                            <div class="source-links">
+                                <a href="https://search.naver.com/search.naver?query=${encodeURIComponent(s.name + ' 증권사 목표가')}" target="_blank" rel="noopener">목표가 검색 (네이버)</a>
+                                <span style="color:var(--border);">|</span>
+                                <a href="https://finance.naver.com/item/main.naver?code=${s.code}" target="_blank" rel="noopener">출처: 네이버 금융</a>
+                                <span style="color:var(--border);">|</span>
+                                <a href="https://www.fnguide.com/stock/${s.code}/summary" target="_blank" rel="noopener">출처: FnGuide</a>
+                                <span style="color:var(--border);">|</span>
+                                <a href="https://www.google.com/search?q=${encodeURIComponent(s.name + ' 증권사 목표가')}" target="_blank" rel="noopener">Google 검색</a>
+                            </div>
                         </div>
                         <div class="metrics">
                             <div class="metric">
