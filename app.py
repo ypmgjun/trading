@@ -43,6 +43,28 @@ def _get_sample_stocks():
     })
 
 
+# 증권사별 목표가 (참고용 샘플·일부 종목. 실제 목표가는 FnGuide 등 유료 데이터 참고)
+BROKER_TARGETS = {
+    '005930': [('키움증권', 85000), ('미래에셋증권', 82000), ('NH투자증권', 83000), ('삼성증권', 84000), ('한양증권', 80000)],
+    '000660': [('키움증권', 280000), ('미래에셋증권', 265000), ('NH투자증권', 270000), ('삼성증권', 275000)],
+    '035420': [('키움증권', 235000), ('미래에셋증권', 220000), ('NH투자증권', 228000)],
+    '051910': [('키움증권', 420000), ('미래에셋증권', 400000), ('LG투자증권', 410000)],
+    '006400': [('키움증권', 420000), ('미래에셋증권', 450000), ('삼성증권', 440000)],
+    '000270': [('키움증권', 95000), ('미래에셋증권', 88000), ('한국투자증권', 92000)],
+    '035720': [('키움증권', 52000), ('미래에셋증권', 48000), ('NH투자증권', 50000)],
+    '068270': [('키움증권', 180000), ('미래에셋증권', 175000), ('삼성증권', 190000)],
+    '207940': [('키움증권', 920000), ('미래에셋증권', 880000), ('삼성증권', 900000)],
+    '373220': [('키움증권', 420000), ('미래에셋증권', 450000), ('한국투자증권', 430000)],
+}
+
+
+def get_broker_targets(code):
+    """증권사별 목표가 (참고용. 없으면 빈 리스트)"""
+    code = str(code).zfill(6)
+    raw = BROKER_TARGETS.get(code, [])
+    return [{'broker': b, 'target_price': p} for b, p in raw]
+
+
 def get_stock_data(code, days=400):
     """개별 종목 시세 조회"""
     end_date = datetime.now()
@@ -180,12 +202,14 @@ def analyze_and_rank_stocks(max_stocks=50, top_n=10):
             if df is not None and len(df) >= 10:
                 indicators = calculate_technical_indicators(df)
                 if indicators:
-                    results.append({
+                    row = {
                         'code': str(code).zfill(6),
                         'name': name,
                         'market': str(market) if pd.notna(market) else 'KOSPI',
                         **indicators
-                    })
+                    }
+                    row['broker_targets'] = get_broker_targets(code)
+                    results.append(row)
         except Exception:
             continue
 
@@ -289,6 +313,7 @@ def api_analyze():
             return jsonify({'success': False, 'error': '분석 결과를 산출할 수 없습니다.'})
 
         result = {'code': code, 'name': name, 'market': market, **indicators}
+        result['broker_targets'] = get_broker_targets(code)
         return jsonify({'success': True, 'data': result, 'updated': datetime.now().strftime('%Y-%m-%d %H:%M')})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
