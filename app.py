@@ -43,26 +43,58 @@ def _get_sample_stocks():
     })
 
 
-# 증권사별 목표가 (참고용 샘플·일부 종목. 실제 목표가는 FnGuide 등 유료 데이터 참고)
-BROKER_TARGETS = {
-    '005930': [('키움증권', 85000), ('미래에셋증권', 82000), ('NH투자증권', 83000), ('삼성증권', 84000), ('한양증권', 80000)],
-    '000660': [('키움증권', 280000), ('미래에셋증권', 265000), ('NH투자증권', 270000), ('삼성증권', 275000)],
-    '035420': [('키움증권', 235000), ('미래에셋증권', 220000), ('NH투자증권', 228000)],
-    '051910': [('키움증권', 420000), ('미래에셋증권', 400000), ('LG투자증권', 410000)],
-    '006400': [('키움증권', 420000), ('미래에셋증권', 450000), ('삼성증권', 440000)],
-    '000270': [('키움증권', 95000), ('미래에셋증권', 88000), ('한국투자증권', 92000)],
-    '035720': [('키움증권', 52000), ('미래에셋증권', 48000), ('NH투자증권', 50000)],
-    '068270': [('키움증권', 180000), ('미래에셋증권', 175000), ('삼성증권', 190000)],
-    '207940': [('키움증권', 920000), ('미래에셋증권', 880000), ('삼성증권', 900000)],
-    '373220': [('키움증권', 420000), ('미래에셋증권', 450000), ('한국투자증권', 430000)],
+# 목표가: 최근 출처(네이버 금융)에서 파싱. 실패 시 참고용 샘플
+BROKER_TARGETS_FALLBACK = {
+    '005930': [('컨센서스(참고)', 85000)],
+    '000660': [('컨센서스(참고)', 280000)],
+    '035420': [('컨센서스(참고)', 235000)],
 }
 
 
-def get_broker_targets(code):
-    """증권사별 목표가 (참고용. 없으면 빈 리스트)"""
+def fetch_target_from_naver(code):
+    """네이버 금융 종목분석 페이지에서 목표주가 파싱 (최근 출처 분석)"""
+    import re
     code = str(code).zfill(6)
-    raw = BROKER_TARGETS.get(code, [])
-    return [{'broker': b, 'target_price': p} for b, p in raw]
+    url = f'https://finance.naver.com/item/coinfo.naver?code={code}'
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+    try:
+        import requests
+        r = requests.get(url, headers=headers, timeout=8)
+        r.encoding = r.apparent_encoding or 'euc-kr'
+        html = r.text
+    except Exception:
+        return None, None
+
+    # 목표주가 패턴 (네이버 종목분석 페이지: 투자의견|목표주가| 4.00매수 l 243,040)
+    match = re.search(r'목표\s*주가[^0-9]*([0-9,]+)', html)
+    if not match:
+        match = re.search(r'목표주가[^0-9]*([0-9,]+)', html)
+    if not match:
+        match = re.search(r'[\d.]+\s*매수\s*[l|]\s*([0-9,]+)', html)
+    if not match:
+        match = re.search(r'투자의견[^0-9]*([0-9,]+)', html)
+    if not match:
+        match = re.search(r'(\d{1,3}(?:,\d{3})+)\s*원', html)
+    if match:
+        num_str = match.group(1).replace(',', '')
+        if num_str.isdigit():
+            price = int(num_str)
+            if 1000 <= price <= 99999999:
+                return [{'broker': '네이버 금융(컨센서스)', 'target_price': price}], url
+    return None, url
+
+
+def get_broker_targets(code):
+    """목표가: 최근 출처(웹) 분석 후 반환, 출처 URL 1개"""
+    code = str(code).zfill(6)
+    targets, source_url = fetch_target_from_naver(code)
+    if targets:
+        return {'targets': targets, 'source_url': source_url}
+    raw = BROKER_TARGETS_FALLBACK.get(code, [])
+    return {
+        'targets': [{'broker': b, 'target_price': p} for b, p in raw],
+        'source_url': f'https://finance.naver.com/item/coinfo.naver?code={code}' if raw else None
+    }
 
 
 def get_stock_data(code, days=400):
@@ -202,20 +234,23 @@ def analyze_and_rank_stocks(max_stocks=50, top_n=10):
             if df is not None and len(df) >= 10:
                 indicators = calculate_technical_indicators(df)
                 if indicators:
-                    row = {
+                    results.append({
                         'code': str(code).zfill(6),
                         'name': name,
                         'market': str(market) if pd.notna(market) else 'KOSPI',
                         **indicators
-                    }
-                    row['broker_targets'] = get_broker_targets(code)
-                    results.append(row)
+                    })
         except Exception:
             continue
 
-    # 점수 기준 정렬
+    # 점수 기준 정렬 후 상위 N개만 목표가 조회 (출처 요청 최소화)
     results.sort(key=lambda x: x['score'], reverse=True)
-    return results[:top_n]
+    top = results[:top_n]
+    for row in top:
+        gt = get_broker_targets(row['code'])
+        row['broker_targets'] = gt.get('targets', [])
+        row['target_source_url'] = gt.get('source_url') or ''
+    return top
 
 
 @app.route('/')
@@ -313,7 +348,9 @@ def api_analyze():
             return jsonify({'success': False, 'error': '분석 결과를 산출할 수 없습니다.'})
 
         result = {'code': code, 'name': name, 'market': market, **indicators}
-        result['broker_targets'] = get_broker_targets(code)
+        gt = get_broker_targets(code)
+        result['broker_targets'] = gt.get('targets', [])
+        result['target_source_url'] = gt.get('source_url') or ''
         return jsonify({'success': True, 'data': result, 'updated': datetime.now().strftime('%Y-%m-%d %H:%M')})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
