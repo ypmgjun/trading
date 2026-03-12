@@ -259,6 +259,10 @@
         .price-box-item .val { font-size: 1rem; font-weight: 600; }
         .price-box-item .val.up { color: var(--up); }
         .price-box-item .val.down { color: var(--down); }
+        .current-price-wrap { display: inline-flex; align-items: center; gap: 0.35rem; }
+        .price-triangle { width: 0; height: 0; flex-shrink: 0; }
+        .price-triangle.up { border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid #f85149; }
+        .price-triangle.down { border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid #58a6ff; }
         .btn-refresh { padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); cursor: pointer; }
         .btn-refresh:hover { color: var(--accent); }
 
@@ -422,7 +426,10 @@
                                 <div class="price-box-row">
                                     <div class="price-box-item">
                                         <div class="label">실시간 현재가</div>
-                                        <div class="val ${s.change_1d >= 0 ? 'up' : 'down'}" id="price-${s.code}">${formatPrice(s.current_price)}원</div>
+                                        <div class="current-price-wrap">
+                                        <span class="price-triangle ${s.change_1d >= 0 ? 'up' : 'down'}"></span>
+                                        <span class="val ${s.change_1d >= 0 ? 'up' : 'down'}" id="price-${s.code}">${formatPrice(s.current_price)}원</span>
+                                    </div>
                                         <div class="metric-desc">전일대비 ${s.change_1d >= 0 ? '+' : ''}${s.change_1d}%</div>
                                     </div>
                                     <button class="btn-refresh" data-code="${s.code}" title="가격 갱신">🔄 갱신</button>
@@ -492,8 +499,10 @@
                                 if (el) {
                                     el.textContent = formatPrice(j.current_price) + '원';
                                     el.className = 'val ' + (j.change_1d >= 0 ? 'up' : 'down');
+                                    const tri = el.parentElement?.querySelector('.price-triangle');
+                                    if (tri) { tri.className = 'price-triangle ' + (j.change_1d >= 0 ? 'up' : 'down'); }
                                 }
-                                const desc = el?.nextElementSibling;
+                                const desc = el?.parentElement?.nextElementSibling;
                                 if (desc) desc.textContent = '전일대비 ' + (j.change_1d >= 0 ? '+' : '') + j.change_1d + '% (' + j.updated + ' 갱신)';
                             }
                         } finally { btn.disabled = false; }
@@ -526,7 +535,10 @@
                             <div class="price-box-row">
                                 <div class="price-box-item">
                                     <div class="label">실시간 현재가</div>
-                                    <div class="val ${s.change_1d >= 0 ? 'up' : 'down'}" id="price-search">${formatPrice(s.current_price)}원</div>
+                                    <div class="current-price-wrap">
+                                    <span class="price-triangle ${s.change_1d >= 0 ? 'up' : 'down'}"></span>
+                                    <span class="val ${s.change_1d >= 0 ? 'up' : 'down'}" id="price-search">${formatPrice(s.current_price)}원</span>
+                                </div>
                                     <div class="metric-desc">전일대비 ${s.change_1d >= 0 ? '+' : ''}${s.change_1d}%</div>
                                 </div>
                                 <button class="btn-refresh" id="btnRefreshSearch" data-code="${s.code}" title="가격 갱신">🔄 갱신</button>
@@ -603,8 +615,10 @@
                             if (el) {
                                 el.textContent = formatPrice(j.current_price) + '원';
                                 el.className = 'val ' + (j.change_1d >= 0 ? 'up' : 'down');
+                                const tri = el.parentElement?.querySelector('.price-triangle');
+                                if (tri) { tri.className = 'price-triangle ' + (j.change_1d >= 0 ? 'up' : 'down'); }
                             }
-                            const desc = el?.nextElementSibling;
+                            const desc = el?.parentElement?.nextElementSibling;
                             if (desc) desc.textContent = '전일대비 ' + (j.change_1d >= 0 ? '+' : '') + j.change_1d + '% (' + j.updated + ' 갱신)';
                         }
                     } finally { refreshBtn.disabled = false; }
