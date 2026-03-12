@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>한국 주식 모멘텀 분석 | 참고용</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --bg-hover: #21262d;
+            --accent: #00d4aa;
+            --accent-dim: #00a884;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --up: #3fb950;
+            --down: #f85149;
+            --border: #30363d;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Noto Sans KR', -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .gradient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 400px;
+            background: radial-gradient(ellipse at 50% 0%, rgba(0,212,170,0.12) 0%, transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .disclaimer {
+            background: rgba(248,81,73,0.1);
+            border: 1px solid rgba(248,81,73,0.3);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 2rem;
+            font-size: 0.85rem;
+            color: #ffa198;
+        }
+
+        .disclaimer strong { color: #f85149; }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            font-family: inherit;
+            font-weight: 500;
+            padding: 0.6rem 1.25rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg-dark);
+        }
+        .btn-primary:hover { background: var(--accent-dim); transform: translateY(-1px); }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .stock-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1rem;
+        }
+
+        .stock-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .stock-card:hover {
+            border-color: var(--accent-dim);
+            box-shadow: 0 4px 20px rgba(0,212,170,0.08);
+        }
+
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .stock-name {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .stock-code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .stock-price {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .stock-change {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        .stock-change.up { color: var(--up); }
+        .stock-change.down { color: var(--down); }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .metric {
+            text-align: center;
+        }
+        .metric-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .metric-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-top: 0.2rem;
+        }
+        .metric-value.positive { color: var(--up); }
+        .metric-value.negative { color: var(--down); }
+
+        .metric-desc {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-top: 0.35rem;
+            line-height: 1.35;
+            opacity: 0.9;
+        }
+
+        .score-badge {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
+            color: var(--bg-dark);
+            font-weight: 700;
+            font-size: 0.85rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+        }
+
+        .updated {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin-top: 1.5rem;
+        }
+
+        .data-sources {
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .chart-wrap {
+            margin: 1rem 0;
+            padding: 0.75rem;
+            background: var(--bg-hover);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            height: 140px;
+        }
+        .chart-wrap canvas { max-height: 120px; }
+    </style>
+</head>
+<body>
+    <div class="gradient-bg"></div>
+    <div class="container">
+        <header>
+            <h1>주간 모멘텀 분석</h1>
+            <p class="subtitle">FinanceDataReader · KRX 데이터 기반 기술적 지표 분석 (참고용)</p>
+        </header>
+
+        <div class="disclaimer">
+            <strong>⚠ 투자 참고 사항</strong><br>
+            본 분석은 한국증권전산, KRX 공개 데이터 및 FinanceDataReader를 활용한 <strong>참고용</strong> 도구입니다.
+            키움증권·미래에셋증권 등 증권사 실시간 API와 무관하며, <strong>10% 이상 상승을 보장하지 않습니다.</strong>
+            주식 투자 결정은 본인 판단과 책임 하에 이루어져야 하며, 투자 손실에 대해 어떠한 책임도 지지 않습니다.
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" id="btnAnalyze">분석 실행</button>
+            <select id="topCount" style="padding:0.6rem 1rem;border-radius:8px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:inherit;">
+                <option value="5">상위 5종목</option>
+                <option value="10" selected>상위 10종목</option>
+                <option value="15">상위 15종목</option>
+                <option value="20">상위 20종목</option>
+            </select>
+        </div>
+
+        <div id="content">
+            <div class="loading" id="loading" style="display:none;">
+                <div class="spinner"></div>
+                <span>KRX 데이터 분석 중...</span>
+            </div>
+            <div id="results"></div>
+        </div>
+
+        <p class="updated" id="updated"></p>
+        <div class="data-sources">
+            데이터: FinanceDataReader (KRX/네이버금융) · 분석: 모멘텀, RSI, 거래량 추세
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        const btn = document.getElementById('btnAnalyze');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        const updated = document.getElementById('updated');
+        const topCount = document.getElementById('topCount');
+
+        function formatPrice(n) {
+            return new Intl.NumberFormat('ko-KR').format(Math.round(n));
+        }
+
+        function getBuyPriceDesc(s) {
+            if (s.buy_discount === undefined) return '20일 이평·RSI 반영 참고가. 보장 아님';
+            if (s.buy_discount > 0) return `현재가 대비 ${s.buy_discount}% 하락 구간. 20일 이평 지지선 참고`;
+            if (s.buy_discount < 0) return '현재가가 이평 아래. 과매도 구간일 수 있음';
+            return '20일 이평선 근처. 조정 시 참고용 (투자권유 아님)';
+        }
+
+        function renderStocks(data) {
+            if (!data || data.length === 0) {
+                results.innerHTML = '<p class="loading">추천 종목이 없습니다. 잠시 후 다시 시도해 주세요.</p>';
+                return;
+            }
+
+            results.innerHTML = `
+                <div class="stock-grid">
+                    ${data.map((s, i) => `
+                        <div class="stock-card">
+                            <div class="stock-header">
+                                <div>
+                                    <div class="stock-name">${escapeHtml(s.name)}</div>
+                                    <div class="stock-code">${s.code} · ${s.market}</div>
+                                </div>
+                                <span class="score-badge" title="모멘텀·RSI·거래량 기반 종합 점수">점수 ${s.score}</span>
+                            </div>
+                            <div class="stock-price">${formatPrice(s.current_price)}원</div>
+                            <div class="metric-desc">최근 거래일 종가 기준 현재 주가</div>
+                            <div class="stock-change ${s.change_1d >= 0 ? 'up' : 'down'}">
+                                전일대비 ${s.change_1d >= 0 ? '+' : ''}${s.change_1d}%
+                            </div>
+                            <div class="metric-desc">어제 대비 오늘 가격이 얼마나 변했는지</div>
+                            <div class="chart-wrap">
+                                <div class="metric-label" style="margin-bottom:0.5rem;">주가 추이 (최근 20거래일)</div>
+                                <canvas id="chart-${s.code}" role="img" aria-label="주가 차트"></canvas>
+                            </div>
+                            <div class="buy-price-box" style="background:var(--bg-hover);border-radius:8px;padding:0.75rem 1rem;margin:1rem 0;border:1px solid var(--accent-dim);">
+                                <div class="metric-label" style="margin-bottom:0.25rem;">매수 적정가</div>
+                                <div class="stock-price" style="font-size:1.2rem;margin:0;">${formatPrice(s.buy_price || s.current_price)}원</div>
+                                <div class="metric-desc">${getBuyPriceDesc(s)}</div>
+                            </div>
+                            <div class="metrics">
+                                <div class="metric">
+                                    <div class="metric-label">5일 모멘텀</div>
+                                    <div class="metric-value ${s.momentum_5 >= 0 ? 'positive' : 'negative'}">${s.momentum_5 >= 0 ? '+' : ''}${s.momentum_5}%</div>
+                                    <div class="metric-desc">최근 5거래일간 수익률. 양수면 단기 상승세</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-label">20일 모멘텀</div>
+                                    <div class="metric-value ${s.momentum_20 >= 0 ? 'positive' : 'negative'}">${s.momentum_20 >= 0 ? '+' : ''}${s.momentum_20}%</div>
+                                    <div class="metric-desc">한 달(20거래일) 수익률. 중기 추세 방향</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-label">RSI</div>
+                                    <div class="metric-value">${s.rsi}</div>
+                                    <div class="metric-desc">과매수 70↑ · 과매도 30↓. 40~60이 안정 구간</div>
+                                </div>
+                            </div>
+                            <div class="metric-desc" style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border);">
+                                <strong>종합 점수</strong> · 모멘텀·RSI·거래량을 조합한 참고 점수. 높을수록 조건이 양호해 보이나, 절대적 추천 아님.
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            // 차트 렌더링 (DOM 반영 후)
+            requestAnimationFrame(() => {
+                (data || []).forEach(s => renderChart(s));
+            });
+        }
+
+        const chartInstances = {};
+        function renderChart(s) {
+            if (chartInstances[s.code]) {
+                chartInstances[s.code].destroy();
+            }
+            const dates = s.chart_dates || [];
+            const prices = s.chart_prices || [];
+            if (!dates.length || !prices.length) return;
+            const ctx = document.getElementById('chart-' + s.code);
+            if (!ctx) return;
+            const isUp = (prices[prices.length-1] || 0) >= (prices[0] || 0);
+            chartInstances[s.code] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: '종가',
+                        data: prices,
+                        borderColor: isUp ? '#3fb950' : '#f85149',
+                        backgroundColor: isUp ? 'rgba(63,185,80,0.1)' : 'rgba(248,81,73,0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (item) => formatPrice(item.raw) + '원'
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            grid: { color: 'rgba(48,54,61,0.5)' },
+                            ticks: { maxTicksLimit: 6, color: '#8b949e', font: { size: 9 } }
+                        },
+                        y: {
+                            display: true,
+                            position: 'right',
+                            grid: { color: 'rgba(48,54,61,0.5)' },
+                            ticks: { maxTicksLimit: 4, color: '#8b949e', font: { size: 9 },
+                                callback: (v) => (v >= 10000 ? (v/10000) + '만' : v)
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function escapeHtml(t) {
+            const div = document.createElement('div');
+            div.textContent = t;
+            return div.innerHTML;
+        }
+
+        async function runAnalysis() {
+            loading.style.display = 'flex';
+            results.innerHTML = '';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/recommendations?top=${topCount.value}`);
+                const json = await res.json();
+
+                if (json.success) {
+                    Object.values(chartInstances).forEach(c => c && c.destroy());
+                    Object.keys(chartInstances).forEach(k => delete chartInstances[k]);
+                    renderStocks(json.data);
+                    updated.textContent = `마지막 업데이트: ${json.updated}`;
+                } else {
+                    results.innerHTML = `<p class="loading" style="color:var(--down);">오류: ${escapeHtml(json.error || '알 수 없는 오류')}</p>`;
+                }
+            } catch (err) {
+                results.innerHTML = `<p class="loading" style="color:var(--down);">연결 실패. Flask 서버가 실행 중인지 확인해 주세요.</p>`;
+            } finally {
+                loading.style.display = 'none';
+                btn.disabled = false;
+            }
+        }
+
+        btn.addEventListener('click', runAnalysis);
+
+        // 페이지 로드 시 자동 분석
+        runAnalysis();
+    </script>
