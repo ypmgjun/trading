@@ -111,16 +111,24 @@ def calculate_technical_indicators(df):
         min(max(vol_trend, -10), 20)        # 거래량 증가
     )
 
-    # 매수 적정가: 20일 이평(지지선) 참고. RSI 과매수 시 조정 구간 반영
+    # 매수/매도 적정가
     ma5 = close.rolling(5).mean().iloc[-1] if len(close) >= 5 else float(close.iloc[-1])
     ma20 = close.rolling(20).mean().iloc[-1] if len(close) >= 20 else ma5
+    high20 = float(close.tail(20).max()) if len(close) >= 20 else float(close.iloc[-1])
     current = float(close.iloc[-1])
+
     if rsi >= 70:
-        buy_price = round(min(ma20, current * 0.97), 0)  # 과매수: 조정 시 20일선 또는 -3% 구간
+        buy_price = round(min(ma20, current * 0.97), 0)
     elif rsi <= 30:
-        buy_price = round(current, 0)  # 과매도: 현재가 근처 매수
+        buy_price = round(current, 0)
     else:
-        buy_price = round(ma20, 0)  # 기본: 20일 이평 지지선
+        buy_price = round(ma20, 0)
+
+    # 매도 적정가: 20일 고점·이평 상단 참고. RSI 과매도 시 보수적 목표
+    if rsi <= 30:
+        sell_price = round(current * 1.05, 0)  # 과매도: 5% 회복 목표
+    else:
+        sell_price = round(max(high20 * 1.02, ma20 * 1.05, current * 1.03), 0)
 
     # 차트용 기간별 가격 이력 (20일, 60일=월간, 252일=연간)
     def make_chart_data(n):
@@ -144,7 +152,9 @@ def calculate_technical_indicators(df):
         'current_price': current,
         'change_1d': round((close.iloc[-1] / close.iloc[-2] - 1) * 100, 2) if len(close) >= 2 else 0,
         'buy_price': int(buy_price),
-        'buy_discount': round((1 - buy_price / current) * 100, 1),  # 현재가 대비 할인율
+        'sell_price': int(sell_price),
+        'buy_discount': round((1 - buy_price / current) * 100, 1),
+        'sell_premium': round((sell_price / current - 1) * 100, 1),
         'chart_20': chart_20,
         'chart_60': chart_60,
         'chart_252': chart_252
@@ -197,6 +207,30 @@ def api_recommendations():
         top_n = min(max(top_n, 5), 20)
         stocks = analyze_and_rank_stocks(max_stocks=80, top_n=top_n)
         return jsonify({'success': True, 'data': stocks, 'updated': datetime.now().strftime('%Y-%m-%d %H:%M')})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/price')
+def api_price():
+    """단일 종목 최신가 조회 (갱신용)"""
+    code = request.args.get('code', '')
+    if not code or len(str(code)) < 5:
+        return jsonify({'success': False, 'error': '종목코드 필요'})
+    code = str(code).zfill(6)
+    try:
+        df = get_stock_data(code, days=30)
+        if df is None or len(df) < 2:
+            return jsonify({'success': False, 'error': '데이터 없음'})
+        close = df['Close'] if 'Close' in df.columns else df.iloc[:, 3]
+        current = float(close.iloc[-1])
+        change = round((close.iloc[-1] / close.iloc[-2] - 1) * 100, 2) if len(close) >= 2 else 0
+        return jsonify({
+            'success': True,
+            'current_price': current,
+            'change_1d': change,
+            'updated': datetime.now().strftime('%H:%M')
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 

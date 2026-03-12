@@ -239,9 +239,28 @@
             background: var(--bg-hover);
             border-radius: 8px;
             border: 1px solid var(--border);
-            height: 160px;
+            min-height: 140px;
+            overflow: hidden;
+            position: relative;
         }
-        .chart-wrap canvas { max-height: 130px; }
+        .chart-wrap .chart-container { width: 100%; height: 110px; position: relative; }
+        .chart-wrap canvas { display: block; width: 100% !important; max-height: 110px; }
+
+        .price-box {
+            background: var(--bg-hover);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin: 1rem 0;
+            border: 1px solid var(--border);
+        }
+        .price-box-row { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+        .price-box-item { flex: 1; min-width: 100px; }
+        .price-box-item .label { font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.2rem; }
+        .price-box-item .val { font-size: 1rem; font-weight: 600; }
+        .price-box-item .val.up { color: var(--up); }
+        .price-box-item .val.down { color: var(--down); }
+        .btn-refresh { padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 4px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); cursor: pointer; }
+        .btn-refresh:hover { color: var(--accent); }
 
         .tabs {
             display: flex;
@@ -386,24 +405,29 @@
                 results.innerHTML = '<p class="loading">추천 종목이 없습니다. 잠시 후 다시 시도해 주세요.</p>';
                 return;
             }
+            const sorted = [...data].sort((a, b) => (b.score || 0) - (a.score || 0));
 
             results.innerHTML = `
                 <div class="stock-grid">
-                    ${data.map((s, i) => `
+                    ${sorted.map((s, i) => `
                         <div class="stock-card">
                             <div class="stock-header">
                                 <div>
                                     <div class="stock-name">${escapeHtml(s.name)}</div>
                                     <div class="stock-code">${s.code} · ${s.market}</div>
                                 </div>
-                                <span class="score-badge" title="모멘텀·RSI·거래량 기반 종합 점수">점수 ${s.score}</span>
+                                <span class="score-badge" title="모멘텀·RSI·거래량 기반 종합 점수">${i+1}위 · 점수 ${s.score}</span>
                             </div>
-                            <div class="stock-price">${formatPrice(s.current_price)}원</div>
-                            <div class="metric-desc">최근 거래일 종가 기준 현재 주가</div>
-                            <div class="stock-change ${s.change_1d >= 0 ? 'up' : 'down'}">
-                                전일대비 ${s.change_1d >= 0 ? '+' : ''}${s.change_1d}%
+                            <div class="price-box">
+                                <div class="price-box-row">
+                                    <div class="price-box-item">
+                                        <div class="label">실시간 현재가</div>
+                                        <div class="val ${s.change_1d >= 0 ? 'up' : 'down'}" id="price-${s.code}">${formatPrice(s.current_price)}원</div>
+                                        <div class="metric-desc">전일대비 ${s.change_1d >= 0 ? '+' : ''}${s.change_1d}%</div>
+                                    </div>
+                                    <button class="btn-refresh" data-code="${s.code}" title="가격 갱신">🔄 갱신</button>
+                                </div>
                             </div>
-                            <div class="metric-desc">어제 대비 오늘 가격이 얼마나 변했는지</div>
                             <div class="chart-wrap">
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
                                     <span class="metric-label">주가 추이</span>
@@ -413,12 +437,21 @@
                                         <button class="chart-period-btn" data-period="252" data-code="${s.code}">연간</button>
                                     </div>
                                 </div>
-                                <canvas id="chart-${s.code}" role="img" aria-label="주가 차트"></canvas>
+                                <div class="chart-container"><canvas id="chart-${s.code}" role="img" aria-label="주가 차트"></canvas></div>
                             </div>
-                            <div class="buy-price-box" style="background:var(--bg-hover);border-radius:8px;padding:0.75rem 1rem;margin:1rem 0;border:1px solid var(--accent-dim);">
-                                <div class="metric-label" style="margin-bottom:0.25rem;">매수 적정가</div>
-                                <div class="stock-price" style="font-size:1.2rem;margin:0;">${formatPrice(s.buy_price || s.current_price)}원</div>
-                                <div class="metric-desc">${getBuyPriceDesc(s)}</div>
+                            <div class="price-box" style="border-color:var(--accent-dim);">
+                                <div class="price-box-row">
+                                    <div class="price-box-item">
+                                        <div class="label">매수 적정가</div>
+                                        <div class="val">${formatPrice(s.buy_price || s.current_price)}원</div>
+                                        <div class="metric-desc">${getBuyPriceDesc(s)}</div>
+                                    </div>
+                                    <div class="price-box-item">
+                                        <div class="label">매도 적정가</div>
+                                        <div class="val">${formatPrice(s.sell_price || s.current_price)}원</div>
+                                        <div class="metric-desc">${(s.sell_premium !== undefined && s.sell_premium > 0) ? `현재가 대비 +${s.sell_premium}% 목표` : '참고용 (투자권유 아님)'}</div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="metrics">
                                 <div class="metric">
@@ -446,12 +479,31 @@
             `;
             // 차트 렌더링 (DOM 반영 후)
             requestAnimationFrame(() => {
-                (data || []).forEach(s => renderChart(s, 20));
+                (sorted || []).forEach(s => renderChart(s, 20));
+                document.querySelectorAll('.btn-refresh').forEach(btn => {
+                    btn.onclick = async () => {
+                        const code = btn.dataset.code;
+                        btn.disabled = true;
+                        try {
+                            const r = await fetch('/api/price?code=' + code);
+                            const j = await r.json();
+                            if (j.success) {
+                                const el = document.getElementById('price-' + code);
+                                if (el) {
+                                    el.textContent = formatPrice(j.current_price) + '원';
+                                    el.className = 'val ' + (j.change_1d >= 0 ? 'up' : 'down');
+                                }
+                                const desc = el?.nextElementSibling;
+                                if (desc) desc.textContent = '전일대비 ' + (j.change_1d >= 0 ? '+' : '') + j.change_1d + '% (' + j.updated + ' 갱신)';
+                            }
+                        } finally { btn.disabled = false; }
+                    };
+                });
                 document.querySelectorAll('.chart-period-btn').forEach(btn => {
                     btn.onclick = () => {
                         document.querySelectorAll('.chart-period-btn[data-code="' + btn.dataset.code + '"]').forEach(b => b.classList.remove('active'));
                         btn.classList.add('active');
-                        const stock = data.find(x => x.code === btn.dataset.code);
+                        const stock = sorted.find(x => x.code === btn.dataset.code);
                         if (stock) renderChart(stock, parseInt(btn.dataset.period));
                     };
                 });
@@ -470,10 +522,16 @@
                             </div>
                             <span class="score-badge">점수 ${s.score}</span>
                         </div>
-                        <div class="stock-price">${formatPrice(s.current_price)}원</div>
-                        <div class="metric-desc">최근 거래일 종가 기준 현재 주가</div>
-                        <div class="stock-change ${s.change_1d >= 0 ? 'up' : 'down'}">전일대비 ${s.change_1d >= 0 ? '+' : ''}${s.change_1d}%</div>
-                        <div class="metric-desc">어제 대비 오늘 가격이 얼마나 변했는지</div>
+                        <div class="price-box">
+                            <div class="price-box-row">
+                                <div class="price-box-item">
+                                    <div class="label">실시간 현재가</div>
+                                    <div class="val ${s.change_1d >= 0 ? 'up' : 'down'}" id="price-search">${formatPrice(s.current_price)}원</div>
+                                    <div class="metric-desc">전일대비 ${s.change_1d >= 0 ? '+' : ''}${s.change_1d}%</div>
+                                </div>
+                                <button class="btn-refresh" id="btnRefreshSearch" data-code="${s.code}" title="가격 갱신">🔄 갱신</button>
+                            </div>
+                        </div>
                         <div class="chart-wrap">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
                                 <span class="metric-label">주가 추이</span>
@@ -483,12 +541,21 @@
                                     <button class="chart-period-btn" data-period="252" data-id="search">연간</button>
                                 </div>
                             </div>
-                            <canvas id="chart-search" role="img" aria-label="주가 차트"></canvas>
+                            <div class="chart-container"><canvas id="chart-search" role="img" aria-label="주가 차트"></canvas></div>
                         </div>
-                        <div class="buy-price-box" style="background:var(--bg-hover);border-radius:8px;padding:0.75rem 1rem;margin:1rem 0;border:1px solid var(--accent-dim);">
-                            <div class="metric-label" style="margin-bottom:0.25rem;">매수 적정가</div>
-                            <div class="stock-price" style="font-size:1.2rem;margin:0;">${formatPrice(s.buy_price || s.current_price)}원</div>
-                            <div class="metric-desc">${getBuyPriceDesc(s)}</div>
+                        <div class="price-box" style="border-color:var(--accent-dim);">
+                            <div class="price-box-row">
+                                <div class="price-box-item">
+                                    <div class="label">매수 적정가</div>
+                                    <div class="val">${formatPrice(s.buy_price || s.current_price)}원</div>
+                                    <div class="metric-desc">${getBuyPriceDesc(s)}</div>
+                                </div>
+                                <div class="price-box-item">
+                                    <div class="label">매도 적정가</div>
+                                    <div class="val">${formatPrice(s.sell_price || s.current_price)}원</div>
+                                    <div class="metric-desc">${(s.sell_premium !== undefined && s.sell_premium > 0) ? '현재가 대비 +' + s.sell_premium + '% 목표' : '참고용'}</div>
+                                </div>
+                            </div>
                         </div>
                         <div class="metrics">
                             <div class="metric">
@@ -524,6 +591,25 @@
                     renderChart({ ...s, code: 'search' }, parseInt(btn.dataset.period));
                 };
             });
+            const refreshBtn = document.getElementById('btnRefreshSearch');
+            if (refreshBtn) {
+                refreshBtn.onclick = async () => {
+                    refreshBtn.disabled = true;
+                    try {
+                        const r = await fetch('/api/price?code=' + s.code);
+                        const j = await r.json();
+                        if (j.success) {
+                            const el = document.getElementById('price-search');
+                            if (el) {
+                                el.textContent = formatPrice(j.current_price) + '원';
+                                el.className = 'val ' + (j.change_1d >= 0 ? 'up' : 'down');
+                            }
+                            const desc = el?.nextElementSibling;
+                            if (desc) desc.textContent = '전일대비 ' + (j.change_1d >= 0 ? '+' : '') + j.change_1d + '% (' + j.updated + ' 갱신)';
+                        }
+                    } finally { refreshBtn.disabled = false; }
+                };
+            }
         }
 
         const chartInstances = {};
