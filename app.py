@@ -43,7 +43,7 @@ def _get_sample_stocks():
     })
 
 
-def get_stock_data(code, days=60):
+def get_stock_data(code, days=400):
     """개별 종목 시세 조회"""
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
@@ -122,12 +122,18 @@ def calculate_technical_indicators(df):
     else:
         buy_price = round(ma20, 0)  # 기본: 20일 이평 지지선
 
-    # 차트용 최근 20거래일 가격 이력
-    try:
-        chart_dates = [pd.Timestamp(x).strftime('%m/%d') for x in df.index[-20:]]
-    except (AttributeError, TypeError):
-        chart_dates = [str(i + 1) for i in range(min(20, len(close)))]
-    chart_prices = [float(p) for p in close.tail(20).tolist()]
+    # 차트용 기간별 가격 이력 (20일, 60일=월간, 252일=연간)
+    def make_chart_data(n):
+        tail = close.tail(n)
+        try:
+            dates = [pd.Timestamp(x).strftime('%m/%d') for x in df.index[-n:]]
+        except (AttributeError, TypeError):
+            dates = [str(i + 1) for i in range(len(tail))]
+        return {'dates': dates, 'prices': [float(p) for p in tail.tolist()]}
+
+    chart_20 = make_chart_data(min(20, len(close)))
+    chart_60 = make_chart_data(min(60, len(close)))
+    chart_252 = make_chart_data(min(252, len(close)))
 
     return {
         'momentum_5': round(momentum_5, 2),
@@ -139,8 +145,9 @@ def calculate_technical_indicators(df):
         'change_1d': round((close.iloc[-1] / close.iloc[-2] - 1) * 100, 2) if len(close) >= 2 else 0,
         'buy_price': int(buy_price),
         'buy_discount': round((1 - buy_price / current) * 100, 1),  # 현재가 대비 할인율
-        'chart_dates': chart_dates,
-        'chart_prices': chart_prices
+        'chart_20': chart_20,
+        'chart_60': chart_60,
+        'chart_252': chart_252
     }
 
 
@@ -196,7 +203,7 @@ def api_recommendations():
 
 @app.route('/api/search')
 def api_search():
-    """종목 검색"""
+    """종목 검색 (자동완성용)"""
     query = request.args.get('q', '')
     if len(query) < 2:
         return jsonify({'success': True, 'data': []})
@@ -209,6 +216,48 @@ def api_search():
 
     results = matched.head(10).to_dict('records')
     return jsonify({'success': True, 'data': results})
+
+
+@app.route('/api/analyze')
+def api_analyze():
+    """종목명/코드 입력 시 단일 종목 분석"""
+    import re
+    query = request.args.get('q', '').strip()
+    m = re.search(r'\((\d{6})\)', query)
+    if m:
+        query = m.group(1)
+    if not query:
+        return jsonify({'success': False, 'error': '종목명 또는 코드를 입력해 주세요.'})
+
+    stock_list = get_krx_stock_list()
+    if query.isdigit():
+        matched = stock_list[stock_list['Code'].astype(str) == str(query).zfill(6)]
+        if matched.empty:
+            matched = stock_list[stock_list['Code'].astype(str).str.contains(query)]
+    else:
+        matched = stock_list[stock_list['Name'].str.contains(query, case=False, na=False)]
+
+    if matched.empty:
+        return jsonify({'success': False, 'error': f'"{query}"에 해당하는 종목을 찾을 수 없습니다.'})
+
+    row = matched.iloc[0]
+    code = str(row['Code']).zfill(6)
+    name = str(row['Name'])
+    market = str(row['Market']) if pd.notna(row['Market']) else 'KOSPI'
+
+    try:
+        df = get_stock_data(code)
+        if df is None or len(df) < 10:
+            return jsonify({'success': False, 'error': f'"{name}"의 시세 데이터를 불러올 수 없습니다.'})
+
+        indicators = calculate_technical_indicators(df)
+        if not indicators:
+            return jsonify({'success': False, 'error': '분석 결과를 산출할 수 없습니다.'})
+
+        result = {'code': code, 'name': name, 'market': market, **indicators}
+        return jsonify({'success': True, 'data': result, 'updated': datetime.now().strftime('%Y-%m-%d %H:%M')})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 
 if __name__ == '__main__':

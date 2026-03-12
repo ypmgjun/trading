@@ -239,9 +239,70 @@
             background: var(--bg-hover);
             border-radius: 8px;
             border: 1px solid var(--border);
-            height: 140px;
+            height: 160px;
         }
-        .chart-wrap canvas { max-height: 120px; }
+        .chart-wrap canvas { max-height: 130px; }
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .tab {
+            padding: 0.6rem 1.25rem;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.95rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            transition: color 0.2s;
+        }
+        .tab:hover { color: var(--text-primary); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        .search-box {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .search-box input {
+            flex: 1;
+            min-width: 200px;
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 1rem;
+        }
+        .search-box input::placeholder { color: var(--text-secondary); opacity: 0.8; }
+        .chart-periods {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .chart-period-btn {
+            padding: 0.25rem 0.6rem;
+            font-size: 0.75rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        .chart-period-btn:hover { color: var(--text-primary); }
+        .chart-period-btn.active { background: var(--accent-dim); color: var(--bg-dark); border-color: var(--accent); }
     </style>
 </head>
 <body>
@@ -259,6 +320,12 @@
             주식 투자 결정은 본인 판단과 책임 하에 이루어져야 하며, 투자 손실에 대해 어떠한 책임도 지지 않습니다.
         </div>
 
+        <div class="tabs">
+            <button class="tab active" data-tab="recommend">추천 종목</button>
+            <button class="tab" data-tab="search">종목 검색</button>
+        </div>
+
+        <div id="panel-recommend" class="tab-panel active">
         <div class="controls">
             <button class="btn btn-primary" id="btnAnalyze">분석 실행</button>
             <select id="topCount" style="padding:0.6rem 1rem;border-radius:8px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);font-family:inherit;">
@@ -278,6 +345,18 @@
         </div>
 
         <p class="updated" id="updated"></p>
+        </div>
+        </div>
+
+        <div id="panel-search" class="tab-panel">
+            <div class="search-box">
+                <input type="text" id="stockSearchInput" placeholder="종목명 또는 종목코드 입력 (예: 삼성전자, 005930)" list="searchDatalist">
+                <datalist id="searchDatalist"></datalist>
+                <button class="btn btn-primary" id="btnSearchAnalyze">분석</button>
+            </div>
+            <div id="searchResults"></div>
+        </div>
+
         <div class="data-sources">
             데이터: FinanceDataReader (KRX/네이버금융) · 분석: 모멘텀, RSI, 거래량 추세
         </div>
@@ -326,7 +405,14 @@
                             </div>
                             <div class="metric-desc">어제 대비 오늘 가격이 얼마나 변했는지</div>
                             <div class="chart-wrap">
-                                <div class="metric-label" style="margin-bottom:0.5rem;">주가 추이 (최근 20거래일)</div>
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                                    <span class="metric-label">주가 추이</span>
+                                    <div class="chart-periods">
+                                        <button class="chart-period-btn active" data-period="20" data-code="${s.code}">20일</button>
+                                        <button class="chart-period-btn" data-period="60" data-code="${s.code}">월간</button>
+                                        <button class="chart-period-btn" data-period="252" data-code="${s.code}">연간</button>
+                                    </div>
+                                </div>
                                 <canvas id="chart-${s.code}" role="img" aria-label="주가 차트"></canvas>
                             </div>
                             <div class="buy-price-box" style="background:var(--bg-hover);border-radius:8px;padding:0.75rem 1rem;margin:1rem 0;border:1px solid var(--accent-dim);">
@@ -360,20 +446,105 @@
             `;
             // 차트 렌더링 (DOM 반영 후)
             requestAnimationFrame(() => {
-                (data || []).forEach(s => renderChart(s));
+                (data || []).forEach(s => renderChart(s, 20));
+                document.querySelectorAll('.chart-period-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        document.querySelectorAll('.chart-period-btn[data-code="' + btn.dataset.code + '"]').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        const stock = data.find(x => x.code === btn.dataset.code);
+                        if (stock) renderChart(stock, parseInt(btn.dataset.period));
+                    };
+                });
+            });
+        }
+
+        function renderSearchResult(s) {
+            if (!s) return;
+            const html = `
+                <div class="stock-grid">
+                    <div class="stock-card">
+                        <div class="stock-header">
+                            <div>
+                                <div class="stock-name">${escapeHtml(s.name)}</div>
+                                <div class="stock-code">${s.code} · ${s.market}</div>
+                            </div>
+                            <span class="score-badge">점수 ${s.score}</span>
+                        </div>
+                        <div class="stock-price">${formatPrice(s.current_price)}원</div>
+                        <div class="metric-desc">최근 거래일 종가 기준 현재 주가</div>
+                        <div class="stock-change ${s.change_1d >= 0 ? 'up' : 'down'}">전일대비 ${s.change_1d >= 0 ? '+' : ''}${s.change_1d}%</div>
+                        <div class="metric-desc">어제 대비 오늘 가격이 얼마나 변했는지</div>
+                        <div class="chart-wrap">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                                <span class="metric-label">주가 추이</span>
+                                <div class="chart-periods">
+                                    <button class="chart-period-btn active" data-period="20" data-id="search">20일</button>
+                                    <button class="chart-period-btn" data-period="60" data-id="search">월간</button>
+                                    <button class="chart-period-btn" data-period="252" data-id="search">연간</button>
+                                </div>
+                            </div>
+                            <canvas id="chart-search" role="img" aria-label="주가 차트"></canvas>
+                        </div>
+                        <div class="buy-price-box" style="background:var(--bg-hover);border-radius:8px;padding:0.75rem 1rem;margin:1rem 0;border:1px solid var(--accent-dim);">
+                            <div class="metric-label" style="margin-bottom:0.25rem;">매수 적정가</div>
+                            <div class="stock-price" style="font-size:1.2rem;margin:0;">${formatPrice(s.buy_price || s.current_price)}원</div>
+                            <div class="metric-desc">${getBuyPriceDesc(s)}</div>
+                        </div>
+                        <div class="metrics">
+                            <div class="metric">
+                                <div class="metric-label">5일 모멘텀</div>
+                                <div class="metric-value ${s.momentum_5 >= 0 ? 'positive' : 'negative'}">${s.momentum_5 >= 0 ? '+' : ''}${s.momentum_5}%</div>
+                                <div class="metric-desc">최근 5거래일간 수익률</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">20일 모멘텀</div>
+                                <div class="metric-value ${s.momentum_20 >= 0 ? 'positive' : 'negative'}">${s.momentum_20 >= 0 ? '+' : ''}${s.momentum_20}%</div>
+                                <div class="metric-desc">한 달(20거래일) 수익률</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">RSI</div>
+                                <div class="metric-value">${s.rsi}</div>
+                                <div class="metric-desc">과매수 70↑ · 과매도 30↓</div>
+                            </div>
+                        </div>
+                        <div class="metric-desc" style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border);">
+                            <strong>종합 점수</strong> · 모멘텀·RSI·거래량 기반 참고 점수.
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('searchResults').innerHTML = html;
+            if (chartInstances['search']) chartInstances['search'].destroy();
+            const period = 20;
+            renderChart({ ...s, code: 'search' }, period);
+            document.querySelectorAll('#searchResults .chart-period-btn').forEach(btn => {
+                btn.onclick = () => {
+                    document.querySelectorAll('#searchResults .chart-period-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    renderChart({ ...s, code: 'search' }, parseInt(btn.dataset.period));
+                };
             });
         }
 
         const chartInstances = {};
-        function renderChart(s) {
-            if (chartInstances[s.code]) {
-                chartInstances[s.code].destroy();
-            }
-            const dates = s.chart_dates || [];
-            const prices = s.chart_prices || [];
+        function getChartData(s, period) {
+            const key = 'chart_' + (period || 20);
+            const d = s[key] || (s.chart_dates ? { dates: s.chart_dates, prices: s.chart_prices } : null);
+            return d;
+        }
+
+        function renderChart(s, period) {
+            period = period || 20;
+            const chartData = getChartData(s, period);
+            if (!chartData || !chartData.dates || !chartData.prices) return;
+            const dates = chartData.dates;
+            const prices = chartData.prices;
             if (!dates.length || !prices.length) return;
             const ctx = document.getElementById('chart-' + s.code);
             if (!ctx) return;
+            if (chartInstances[s.code]) {
+                chartInstances[s.code].destroy();
+            }
             const isUp = (prices[prices.length-1] || 0) >= (prices[0] || 0);
             chartInstances[s.code] = new Chart(ctx, {
                 type: 'line',
@@ -452,6 +623,61 @@
         }
 
         btn.addEventListener('click', runAnalysis);
+
+        // 탭 전환
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // 종목 검색 분석
+        const searchInput = document.getElementById('stockSearchInput');
+        const btnSearch = document.getElementById('btnSearchAnalyze');
+
+        async function runSearchAnalysis() {
+            const q = searchInput.value.trim();
+            if (!q) {
+                document.getElementById('searchResults').innerHTML = '<p class="loading" style="color:var(--down);">종목명 또는 코드를 입력해 주세요.</p>';
+                return;
+            }
+            document.getElementById('searchResults').innerHTML = '<div class="loading"><div class="spinner"></div><span>분석 중...</span></div>';
+            btnSearch.disabled = true;
+            try {
+                const res = await fetch('/api/analyze?q=' + encodeURIComponent(q));
+                const json = await res.json();
+                if (json.success) {
+                    renderSearchResult(json.data);
+                } else {
+                    document.getElementById('searchResults').innerHTML = '<p class="loading" style="color:var(--down);">' + escapeHtml(json.error || '오류') + '</p>';
+                }
+            } catch (e) {
+                document.getElementById('searchResults').innerHTML = '<p class="loading" style="color:var(--down);">연결 실패.</p>';
+            } finally {
+                btnSearch.disabled = false;
+            }
+        }
+
+        btnSearch.addEventListener('click', runSearchAnalysis);
+        searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') runSearchAnalysis(); });
+
+        // 검색 자동완성
+        searchInput.addEventListener('input', async () => {
+            const q = searchInput.value.trim();
+            if (q.length < 2) { document.getElementById('searchDatalist').innerHTML = ''; return; }
+            try {
+                const res = await fetch('/api/search?q=' + encodeURIComponent(q));
+                const json = await res.json();
+                if (json.success && json.data.length) {
+                    document.getElementById('searchDatalist').innerHTML = json.data.map(x =>
+                        '<option value="' + escapeHtml(x.Name) + ' (' + x.Code + ')">'
+                    ).join('');
+                }
+            } catch (_) {}
+        });
 
         // 페이지 로드 시 자동 분석
         runAnalysis();
